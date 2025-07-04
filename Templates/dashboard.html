@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Document Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .comparison-table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            border-radius: 0.5rem;
+        }
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+        .comparison-table th {
+            background-color: #f8fafc;
+            font-weight: 600;
+            color: #4a5568;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 0.05em;
+        }
+        .comparison-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .comparison-table tbody tr:hover {
+            background-color: #f0f4f8;
+        }
+        .segment-key {
+            font-weight: 700;
+            color: #2d3748;
+        }
+        .segment-content {
+            white-space: pre-wrap;
+            line-height: 1.6;
+        }
+        .section-card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+            margin-bottom: 1rem;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="h-screen bg-gray-100">
+    <div class="flex h-screen bg-gray-100 font-sans">
+        <aside class="w-64 bg-white p-6 shadow-lg flex flex-col items-center justify-start border-r border-gray-200 rounded-r-lg">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Upload File</h2>
+            <div class="w-full">
+                <form action="{% url 'dashboard' %}" method="post" enctype="multipart/form-data" class="w-full">
+                    {% csrf_token %}
+                    <label
+                        for="insert_doc"
+                        class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out block text-center mb-4"
+                    >
+                        Choose File
+                    </label>
+                    <input
+                        id="insert_doc"
+                        type="file"
+                        name="insert_doc"
+                        class="hidden"
+                        onchange="document.getElementById('file-name-display').innerText = this.files[0] ? this.files[0].name : 'No file chosen';"
+                    />
+                    <p id="file-name-display" class="text-sm text-gray-600 truncate text-center mb-4">
+                        No file chosen
+                    </p>
+                    <button
+                        type="submit"
+                        class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out">
+                        Upload
+                    </button>
+                    {% if messages %}
+                        <ul class="messages mt-4">
+                            {% for message in messages %}
+                                <li{% if message.tags %} class="{{ message.tags }} text-sm text-center"{% endif %}>{{ message }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                </form>
+            </div>
+        </aside>
+        
+        <main class="flex-1 p-8 overflow-y-auto">
+            <h1 class="text-3xl font-extrabold text-gray-900 mb-6">
+                Document Translation Comparison
+            </h1>
+            
+            <!-- Loading state -->
+            <div id="loading-state" class="text-center py-8 text-gray-500">
+                {% if not comparison_response or comparison_response == '{}' %}
+                    <p>Upload a document to see the translation comparison</p>
+                {% endif %}
+            </div>
+            
+            <!-- Comparison container -->
+            <div id="comparison-container" class="space-y-4"></div>
+            
+            <!-- Debug info (remove in production) -->
+            <details class="mt-8 bg-gray-50 p-4 rounded">
+                <summary class="cursor-pointer font-medium text-gray-700">Debug Info (Click to expand)</summary>
+                <pre class="mt-2 text-xs text-gray-600 overflow-x-auto">{{ comparison_response }}</pre>
+            </details>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            try {
+                // Get the comparison data from Django template
+                const comparisonDataStr = '{{ comparison_response|escapejs }}';
+                console.log('Raw comparison data:', comparisonDataStr);
+                
+                // Parse the JSON string
+                let comparisonData;
+                try {
+                    comparisonData = JSON.parse(comparisonDataStr);
+                } catch (parseError) {
+                    console.error('JSON Parse Error:', parseError);
+                    console.log('Raw string that failed to parse:', comparisonDataStr);
+                    return;
+                }
+                
+                console.log('Parsed comparison data:', comparisonData);
+                
+                // Check if we have valid data
+                if (!comparisonData || Object.keys(comparisonData).length === 0) {
+                    console.log('No comparison data available');
+                    return;
+                }
+                
+                // Get the container
+                const container = document.getElementById('comparison-container');
+                const loadingState = document.getElementById('loading-state');
+                
+                // Hide loading state
+                if (loadingState) {
+                    loadingState.style.display = 'none';
+                }
+                
+                // Create table
+                const tableContainer = document.createElement('div');
+                tableContainer.className = 'comparison-table-container';
+                
+                const table = document.createElement('table');
+                table.className = 'comparison-table';
+                
+                // Create table header
+                const thead = document.createElement('thead');
+                const headerRow = document.createElement('tr');
+                
+                const headers = ['Section', 'Danish (Original)', 'Faroese (Translation)'];
+                headers.forEach(headerText => {
+                    const th = document.createElement('th');
+                    th.textContent = headerText;
+                    headerRow.appendChild(th);
+                });
+                
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+                
+                // Create table body
+                const tbody = document.createElement('tbody');
+
+                const downloadBtn = document.createElement('button');
+                downloadBtn.textContent = 'Download Document';
+                downloadBtn.className = 'mt-6 bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 px-6 rounded shadow transition';
+                downloadBtn.type = 'button';
+
+                downloadBtn.onclick = function() {
+                    // Gather all Faroese translations
+                    const data = {};
+                    container.querySelectorAll('input[name^="faroese_"]').forEach(input => {
+                        const section = input.name.replace('faroese_', '');
+                        data[section] = input.value;
+                    });
+
+                    // Send to backend and trigger download
+                    fetch("{% url 'download_docx' %}", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": "{{ csrf_token }}"
+                        },
+                        body: JSON.stringify({translations: data})
+                    })
+                    .then(response => response.blob())
+                    .then(blob => {
+                        // Create a link and trigger download
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = "translated_document.docx";
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                    })
+                    .catch(error => {
+                        alert('Error downloading document');
+                        console.error(error);
+                    });
+                };
+                container.appendChild(downloadBtn);
+                
+                // Populate table with data
+                Object.entries(comparisonData).forEach(([section, texts]) => {
+                    const row = document.createElement('tr');
+                    
+                    // Section key
+                    const sectionCell = document.createElement('td');
+                    sectionCell.className = 'segment-key';
+                    sectionCell.textContent = section;
+                    row.appendChild(sectionCell);
+                    
+                    // Danish text
+                    const danishCell = document.createElement('td');
+                    danishCell.className = 'segment-content';
+                    danishCell.textContent = texts.Danish || 'No Danish text';
+                    row.appendChild(danishCell);
+
+                    // Faroese text
+                    const faroeseCell = document.createElement('td');
+                    faroeseCell.className = 'segment-content flex items-center gap-2';
+
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = texts.Faroese || '';
+                    input.name = `faroese_${section}`;
+                    input.className = 'w-[800px] h-10 border border-gray-300 rounded px-3 py-2 text-sm';
+                    input.setAttribute('maxlength', '100');
+
+                    // Checkbox to indicate changes
+                    // Custom checkbox wrapper
+                    const checkboxWrapper = document.createElement('label');
+                    checkboxWrapper.className = 'relative flex items-center cursor-pointer ml-2 group';
+
+                    const changedCheckbox = document.createElement('input');
+                    changedCheckbox.type = 'checkbox';
+                    changedCheckbox.className = 'peer appearance-none w-5 h-5 border border-gray-400 rounded-md bg-white checked:bg-blue-600 checked:border-blue-600 transition-all duration-200 focus:ring-2 focus:ring-blue-400 shadow-sm';
+                    changedCheckbox.disabled = true;
+
+                    const checkmark = document.createElement('span');
+                    checkmark.className = 'absolute left-0 top-0 w-5 h-5 flex items-center justify-center pointer-events-none';
+                    checkmark.innerHTML = `
+                      <svg class="hidden peer-checked:block w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                      </svg>
+                    `;
+
+                    const labelText = document.createElement('span');
+                    labelText.className = 'ml-2 text-xs text-gray-500 group-hover:text-blue-600 transition';
+                    labelText.textContent = 'Changed';
+
+                    checkboxWrapper.appendChild(changedCheckbox);
+                    checkboxWrapper.appendChild(checkmark);
+                    checkboxWrapper.appendChild(labelText);
+
+                    input.addEventListener('input', () => {
+                        changedCheckbox.checked = true;
+                        changedCheckbox.classList.add('ring', 'ring-blue-400');
+                    });
+
+                    faroeseCell.appendChild(input);
+                    faroeseCell.appendChild(checkboxWrapper);
+                    row.appendChild(faroeseCell);
+                    
+                    tbody.appendChild(row);
+                });
+                
+                table.appendChild(tbody);
+                tableContainer.appendChild(table);
+                container.appendChild(tableContainer);
+                
+                // Add summary info
+                const summaryDiv = document.createElement('div');
+                summaryDiv.className = 'mt-4 p-4 bg-blue-50 rounded-lg';
+                summaryDiv.innerHTML = `
+                    <h3 class="font-semibold text-blue-900 mb-2">Translation Summary</h3>
+                    <p class="text-blue-800">Total sections translated: <span class="font-medium">${Object.keys(comparisonData).length}</span></p>
+                `;
+                container.appendChild(summaryDiv);
+
+            } catch (error) {
+                console.error('Error rendering comparison data:', error);
+                const container = document.getElementById('comparison-container');
+                container.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <h3 class="font-semibold text-red-900 mb-2">Error Loading Data</h3>
+                        <p class="text-red-800">There was an error loading the comparison data. Please check the console for details.</p>
+                    </div>
+                `;
+            }
+        });
+
+
+    </script>
+</body>
+</html>
