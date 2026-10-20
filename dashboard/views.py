@@ -1,4 +1,5 @@
-﻿import json
+﻿from django.conf import settings
+import json
 import re
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
@@ -12,7 +13,6 @@ from django.http import HttpResponse
 from docx import Document
 import json
 
-GEMINI_API_KEY = 'replace_here'  # Replace with your actual key
 
 def clean_json_string(text):
     """Clean JSON string by removing invalid control characters and fixing common issues"""
@@ -49,6 +49,8 @@ def clean_json_string(text):
     return cleaned
 
 def call_gemini_llm(json_data):
+    if not settings.GEMINI_API_KEY:
+        return "Translation service is not configured."
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     headers = {
         "Content-Type": "application/json"
@@ -70,7 +72,7 @@ def call_gemini_llm(json_data):
         ]
     }
     params = {
-        "key": GEMINI_API_KEY
+        "key": settings.GEMINI_API_KEY
     }
     response = requests.post(url, headers=headers, params=params, json=payload)
     if response.status_code == 200:
@@ -83,6 +85,8 @@ def call_gemini_llm(json_data):
         return f"Error: {response.status_code} - {response.text}"
     
 def call_gemini2_llm(json_data, llm_response):
+    if not settings.GEMINI_API_KEY:
+        return "Translation service is not configured."
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     headers = {
         "Content-Type": "application/json"
@@ -122,7 +126,7 @@ def call_gemini2_llm(json_data, llm_response):
         ]
     }
     params = {
-        "key": GEMINI_API_KEY
+        "key": settings.GEMINI_API_KEY
     }
     response = requests.post(url, headers=headers, params=params, json=payload)
     if response.status_code == 200:
