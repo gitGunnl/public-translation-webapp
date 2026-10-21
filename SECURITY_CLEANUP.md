@@ -1,8 +1,12 @@
 # Credential and database cleanup
 
-This change removes credentials and runtime files from the proposed branch. Old commits and other branches still contain exposed material. Rotation is required even after merge.
+## Confirmed scope and provider status
 
-## Before merging or pulling on a running service
+The owner confirmed this application is retired on 21 October 2026. The owner deleted the exposed Gemini key from the dk-to-fo translation project, and Google Cloud confirmed the deletion. No replacement provider or Django signing credentials, deployment, or live database migration are needed for this retired application. Do not restore the exposed key. The instructions below apply only if an installation is revived.
+
+This change removes credentials and runtime files from the proposed branch. Old commits and other branches still contain exposed material. Provider status is recorded above. Never reuse an exposed signing key in a future installation.
+
+## If reviving or updating an existing installation
 
 1. Identify the running host and branch. GitHub has no deployment records. Do not merge into an automatically deployed branch until the remaining steps are complete.
 2. Stop writes and back up the live SQLite database to private storage outside the checkout. A pull that removes a tracked `db.sqlite3` can delete the deployed copy. Use the running service's actual database path, not a newly cloned database. Verify the backup with `PRAGMA integrity_check` and compare table counts locally. Do not publish database contents or backups.
@@ -26,7 +30,7 @@ This change removes credentials and runtime files from the proposed branch. Old 
 
 4. Set a new, unique `DJANGO_SECRET_KEY` in the server environment. Generate it privately with `python -c "import secrets; print(secrets.token_urlsafe(64))"`. The application deliberately refuses to start with a missing or empty signing key. Replacing it invalidates existing signed sessions and reset links. Do not keep the exposed value in `SECRET_KEY_FALLBACKS`.
 5. Set `GEMINI_API_KEY` to a replacement provider key and `DJANGO_ALLOWED_HOSTS` to the real host names, comma separated. Keep `DJANGO_DEBUG=false` on the live service. Export these variables in the shell or configure them in the hosting service. This application does not automatically load `.env`.
-6. Deploy, restart, and verify login, existing records and a provider request in a controlled maintenance window. Revoke the exposed provider key and check usage and billing. If abuse is happening, revoke it immediately and accept the temporary outage.
+6. Deploy, restart, and verify login, existing records and a provider request in a controlled maintenance window. The exposed Gemini key has been deleted. Use a fresh key if restarting and review past provider usage privately.
 
 ## New local installation
 
