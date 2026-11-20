@@ -151,14 +151,11 @@ def docx_to_json(file_path):
                 'content': []
             }
             data.append(current_section)
-        else:
-            # Add content to the current section, if any
-            if current_section is not None:
-                if para.text.strip():  # Avoid empty paragraphs
-                    current_section['content'].append(para.text)
-            else:
-                # If content appears before any heading, you can choose to handle it here
-                pass
+        elif para.text.strip():
+            if current_section is None:
+                current_section = {'heading': '', 'content': []}
+                data.append(current_section)
+            current_section['content'].append(para.text)
 
     return json.dumps(data, indent=2)
 
@@ -241,30 +238,6 @@ def dashboard(request):
         'document': document_obj,
         "comparison_response": comparison_response
     })
-
-def docx_to_json(file_path):
-    doc = Document(file_path)
-    data = []
-    current_section = None
-
-    for para in doc.paragraphs:
-        if para.style.name.startswith('Heading'):
-            # Start a new section for each heading
-            current_section = {
-                'heading': para.text,
-                'content': []
-            }
-            data.append(current_section)
-        else:
-            # Add content to the current section, if any
-            if current_section is not None:
-                if para.text.strip():  # Avoid empty paragraphs
-                    current_section['content'].append(para.text)
-            else:
-                # If content appears before any heading, you can choose to handle it here
-                pass
-
-    return json.dumps(data, indent=2)
 
 @csrf_exempt
 def download_docx(request):
